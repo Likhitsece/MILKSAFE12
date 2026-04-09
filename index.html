@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DairyIQ — Milk Quality Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #f5f4f0;
+    color: #111;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: #fff;
+    border-bottom: 0.5px solid #e5e7eb;
+    padding: 14px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px; font-weight: 700;
+    letter-spacing: 1px; color: #111;
+  }
+  .brand-sub { font-size: 11px; color: #9ca3af; letter-spacing: 0.5px; }
+  .live-pill {
+    display: flex; align-items: center; gap: 6px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px; padding: 4px 12px;
+    border-radius: 20px; border: 0.5px solid #86efac;
+    background: #f0fdf4; color: #15803d;
+  }
+  .live-pill.off { border-color: #fca5a5; background: #fef2f2; color: #dc2626; }
+  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: blink 1.4s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+  .hdr-right { display: flex; align-items: center; gap: 10px; }
+  .clock { font-family: 'Space Mono', monospace; font-size: 12px; color: #9ca3af; }
+
+  /* ── Main ── */
+  main { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+
+  /* ── Config bar ── */
+  .config-bar {
+    background: #fff;
+    border: 0.5px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .config-bar label { font-size: 12px; color: #6b7280; white-space: nowrap; }
+  .config-bar input {
+    flex: 1; min-width: 200px;
+    font-family: 'Space Mono', monospace; font-size: 12px;
+    padding: 7px 12px; border: 0.5px solid #d1d5db;
+    border-radius: 6px; background: #f9fafb; color: #111; outline: none;
+  }
+  .config-bar input:focus { border-color: #6b7280; }
+  .btn {
+    font-family: 'DM Sans', sans-serif; font-size: 13px;
+    padding: 7px 18px; border-radius: 6px;
+    border: 0.5px solid #d1d5db; background: #fff;
+    color: #111; cursor: pointer; white-space: nowrap;
+    transition: background .15s;
+  }
+  .btn:hover { background: #f3f4f6; }
+  .btn.primary { background: #111; color: #fff; border-color: #111; }
+  .btn.primary:hover { background: #333; }
+  .btn.danger { background: #fef2f2; color: #dc2626; border-color: #fca5a5; }
+  .btn.danger:hover { background: #fee2e2; }
+
+  /* ── Status banner ── */
+  .status-banner {
+    border-radius: 12px; padding: 20px 26px;
+    margin-bottom: 20px; border: 0.5px solid #e5e7eb;
+    display: flex; align-items: center;
+    justify-content: space-between; gap: 16px;
+    flex-wrap: wrap; transition: background .4s, border-color .4s;
+    background: #f9fafb;
+  }
+  .status-banner.Fresh   { background: #f0fdf4; border-color: #86efac; }
+  .status-banner.Warning { background: #fffbeb; border-color: #fcd34d; }
+  .status-banner.Spoiled { background: #fef2f2; border-color: #fca5a5; }
+
+  .status-left {}
+  .status-eye {
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    font-weight: 500; margin-bottom: 4px; color: #9ca3af;
+  }
+  .status-banner.Fresh   .status-eye { color: #15803d; }
+  .status-banner.Warning .status-eye { color: #92400e; }
+  .status-banner.Spoiled .status-eye { color: #991b1b; }
+
+  .status-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 36px; font-weight: 700;
+    letter-spacing: -1px; color: #d1d5db;
+    transition: color .4s;
+  }
+  .status-banner.Fresh   .status-val { color: #15803d; }
+  .status-banner.Warning .status-val { color: #b45309; }
+  .status-banner.Spoiled .status-val { color: #dc2626; }
+
+  .conf-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .conf-track { height: 4px; width: 200px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
+  .conf-fill  { height: 4px; background: #d1d5db; border-radius: 4px; transition: width .6s ease; }
+  .status-banner.Fresh   .conf-fill { background: #16a34a; }
+  .status-banner.Warning .conf-fill { background: #d97706; }
+  .status-banner.Spoiled .conf-fill { background: #dc2626; }
+  .conf-pct { font-family: 'Space Mono', monospace; font-size: 12px; color: #9ca3af; }
+  .status-ts { font-size: 11px; color: #9ca3af; margin-top: 5px; }
+
+  .status-right {
+    text-align: right;
+  }
+  .shelf-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #9ca3af; margin-bottom: 4px; }
+  .shelf-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 32px; font-weight: 700; color: #111;
+  }
+  .shelf-unit { font-size: 13px; color: #9ca3af; margin-left: 3px; }
+  .alert-text { font-size: 12px; color: #6b7280; margin-top: 6px; max-width: 280px; text-align: right; }
+
+  /* ── Metric cards ── */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px; margin-bottom: 20px;
+  }
+  .metric {
+    background: #fff; border: 0.5px solid #e5e7eb;
+    border-radius: 10px; padding: 16px 18px;
+    position: relative; overflow: hidden;
+  }
+  .metric::before {
+    content: ''; position: absolute;
+    top: 0; left: 0; right: 0; height: 3px;
+    border-radius: 10px 10px 0 0;
+  }
+  .metric.ph::before   { background: #7c3aed; }
+  .metric.temp::before { background: #ea580c; }
+  .metric.gas::before  { background: #0284c7; }
+  .metric-lbl {
+    font-size: 10px; color: #9ca3af;
+    letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px;
+  }
+  .metric-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 28px; font-weight: 700; color: #111; line-height: 1;
+  }
+  .metric-unit { font-size: 12px; color: #9ca3af; margin-left: 3px; }
+  .metric-range { font-size: 11px; color: #d1d5db; margin-top: 6px; }
+  .metric-bar { height: 3px; background: #f3f4f6; border-radius: 2px; margin-top: 10px; overflow: hidden; }
+  .metric-bar-fill { height: 3px; border-radius: 2px; transition: width .6s ease, background .4s; }
+
+  /* ── Charts row ── */
+  .charts {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 14px; margin-bottom: 20px;
+  }
+  .chart-card {
+    background: #fff; border: 0.5px solid #e5e7eb;
+    border-radius: 10px; padding: 18px 20px;
+  }
+  .chart-title {
+    font-size: 12px; font-weight: 500;
+    color: #6b7280; margin-bottom: 14px;
+  }
+  .legend {
+    display: flex; gap: 14px; margin-bottom: 10px;
+    font-size: 11px; color: #9ca3af; flex-wrap: wrap;
+  }
+  .legend span { display: flex; align-items: center; gap: 4px; }
+  .leg-box { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+  /* ── ML probabilities ── */
+  .prob-section { margin-top: 4px; }
+  .prob-row { margin-bottom: 10px; }
+  .prob-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .prob-name { color: #374151; }
+  .prob-pct  { font-family: 'Space Mono', monospace; color: #6b7280; }
+  .prob-track { height: 6px; background: #f3f4f6; border-radius: 3px; overflow: hidden; }
+  .prob-fill  { height: 6px; border-radius: 3px; transition: width .8s ease; }
+
+  /* ── Bottom row ── */
+  .bottom {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px; margin-bottom: 20px;
+  }
+  .table-card {
+    background: #fff; border: 0.5px solid #e5e7eb;
+    border-radius: 10px; overflow: hidden;
+  }
+  .card-head {
+    padding: 14px 18px; border-bottom: 0.5px solid #e5e7eb;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .card-title { font-size: 13px; font-weight: 500; color: #374151; }
+  .count-badge {
+    font-family: 'Space Mono', monospace; font-size: 11px;
+    background: #f3f4f6; border: 0.5px solid #e5e7eb;
+    border-radius: 4px; padding: 2px 8px; color: #6b7280;
+  }
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+  thead th {
+    padding: 8px 14px; text-align: left;
+    font-size: 10px; font-weight: 500; color: #9ca3af;
+    letter-spacing: 1px; text-transform: uppercase;
+    border-bottom: 0.5px solid #e5e7eb; background: #fafafa;
+  }
+  tbody td { padding: 9px 14px; border-bottom: 0.5px solid #f3f4f6; color: #374151; font-family: 'Space Mono', monospace; font-size: 11px; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: #fafafa; }
+  .pill {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 20px; font-size: 10px; font-weight: 500;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .pill.Fresh   { background: #dcfce7; color: #15803d; }
+  .pill.Warning { background: #fef9c3; color: #92400e; }
+  .pill.Spoiled { background: #fee2e2; color: #991b1b; }
+
+  /* ── Alert log ── */
+  .alert-card {
+    background: #fff; border: 0.5px solid #e5e7eb;
+    border-radius: 10px; overflow: hidden;
+  }
+  .alert-list { padding: 8px 0; max-height: 320px; overflow-y: auto; }
+  .alert-item {
+    display: flex; gap: 10px; padding: 9px 16px;
+    border-bottom: 0.5px solid #f3f4f6;
+    font-size: 12px; align-items: flex-start;
+  }
+  .alert-item:last-child { border-bottom: none; }
+  .alert-time { font-family: 'Space Mono', monospace; font-size: 10px; color: #9ca3af; white-space: nowrap; flex-shrink: 0; padding-top: 1px; }
+  .alert-msg { color: #374151; line-height: 1.5; }
+  .alert-item.Fresh   { border-left: 2px solid #16a34a; }
+  .alert-item.Warning { border-left: 2px solid #d97706; }
+  .alert-item.Spoiled { border-left: 2px solid #dc2626; }
+  .alert-item.info    { border-left: 2px solid #0284c7; }
+  .alert-item.Fresh   .alert-msg { }
+  .empty-state { padding: 32px; text-align: center; font-size: 12px; color: #9ca3af; }
+
+  /* ── Poll bar ── */
+  .poll-bar {
+    text-align: center; font-family: 'Space Mono', monospace;
+    font-size: 11px; color: #9ca3af; padding-bottom: 24px;
+  }
+
+  @media(max-width: 700px) {
+    main { padding: 16px; }
+    .metrics { grid-template-columns: 1fr; }
+    .charts  { grid-template-columns: 1fr; }
+    .bottom  { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand">
+    <div>
+      <div class="brand-name">DairyIQ</div>
+      <div class="brand-sub">Milk Quality Monitor · ESP32 + ML</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <div class="live-pill off" id="livePill">
+      <div class="live-dot"></div>
+      <span id="liveText">Offline</span>
+    </div>
+    <span class="clock" id="clock">--:--:--</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Config bar -->
+  <div class="config-bar">
+    <label>Server URL</label>
+    <input id="serverUrl" value="http://localhost:5000" placeholder="http://192.168.x.x:5000">
+    <button class="btn primary" onclick="connectServer()">Connect</button>
+    <button class="btn" onclick="loadHistory()">Load history</button>
+    <button class="btn danger" onclick="clearDashboard()">Clear</button>
+    <button class="btn" onclick="exportCSV()">Export CSV</button>
+  </div>
+
+  <!-- Status banner -->
+  <div class="status-banner" id="statusBanner">
+    <div class="status-left">
+      <div class="status-eye" id="statusEye">Waiting for ESP32</div>
+      <div class="status-val" id="statusVal">— — —</div>
+      <div class="conf-row">
+        <div class="conf-track"><div class="conf-fill" id="confFill" style="width:0%"></div></div>
+        <span class="conf-pct" id="confPct">— %</span>
+      </div>
+      <div class="status-ts" id="statusTs">No readings yet</div>
+    </div>
+    <div class="status-right">
+      <div class="shelf-label">Shelf life remaining</div>
+      <div><span class="shelf-val" id="shelfVal">—</span><span class="shelf-unit">hrs</span></div>
+      <div class="alert-text" id="alertText">—</div>
+    </div>
+  </div>
+
+  <!-- Sensor metrics -->
+  <div class="metrics">
+    <div class="metric ph">
+      <div class="metric-lbl">pH Level</div>
+      <div><span class="metric-val" id="mPh">—</span><span class="metric-unit">pH</span></div>
+      <div class="metric-range">Fresh: 6.6 – 6.8</div>
+      <div class="metric-bar"><div class="metric-bar-fill" id="bPh" style="width:0%;background:#7c3aed"></div></div>
+    </div>
+    <div class="metric temp">
+      <div class="metric-lbl">Temperature</div>
+      <div><span class="metric-val" id="mTemp">—</span><span class="metric-unit">°C</span></div>
+      <div class="metric-range">Fresh: 4 – 6 °C</div>
+      <div class="metric-bar"><div class="metric-bar-fill" id="bTemp" style="width:0%;background:#ea580c"></div></div>
+    </div>
+    <div class="metric gas">
+      <div class="metric-lbl">Gas Level</div>
+      <div><span class="metric-val" id="mGas">—</span><span class="metric-unit">ppm</span></div>
+      <div class="metric-range">Fresh: 150 – 200 ppm</div>
+      <div class="metric-bar"><div class="metric-bar-fill" id="bGas" style="width:0%;background:#0284c7"></div></div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts">
+    <div class="chart-card">
+      <div class="chart-title">Sensor readings over time</div>
+      <div class="legend">
+        <span><span class="leg-box" style="background:#7c3aed"></span>pH</span>
+        <span><span class="leg-box" style="background:#ea580c"></span>Temp °C</span>
+        <span><span class="leg-box" style="background:#0284c7"></span>Gas ÷ 10</span>
+      </div>
+      <div style="position:relative;height:220px">
+        <canvas id="lineChart" role="img" aria-label="Line chart showing pH, temperature, and gas readings over time"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">ML prediction probabilities</div>
+      <div class="prob-section" id="probSection">
+        <div class="prob-row">
+          <div class="prob-head"><span class="prob-name">Fresh</span><span class="prob-pct" id="pFresh">—</span></div>
+          <div class="prob-track"><div class="prob-fill" id="pfFresh" style="width:0%;background:#16a34a"></div></div>
+        </div>
+        <div class="prob-row">
+          <div class="prob-head"><span class="prob-name">Warning</span><span class="prob-pct" id="pWarning">—</span></div>
+          <div class="prob-track"><div class="prob-fill" id="pfWarning" style="width:0%;background:#d97706"></div></div>
+        </div>
+        <div class="prob-row">
+          <div class="prob-head"><span class="prob-name">Spoiled</span><span class="prob-pct" id="pSpoiled">—</span></div>
+          <div class="prob-track"><div class="prob-fill" id="pfSpoiled" style="width:0%;background:#dc2626"></div></div>
+        </div>
+        <div style="margin-top:20px">
+          <div class="chart-title">Prediction distribution</div>
+          <div class="legend">
+            <span><span class="leg-box" style="background:#16a34a"></span>Fresh</span>
+            <span><span class="leg-box" style="background:#d97706"></span>Warning</span>
+            <span><span class="leg-box" style="background:#dc2626"></span>Spoiled</span>
+          </div>
+          <div style="position:relative;height:140px">
+            <canvas id="pieChart" role="img" aria-label="Donut chart showing distribution of Fresh, Warning, and Spoiled predictions"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom row: table + alerts -->
+  <div class="bottom">
+    <div class="table-card">
+      <div class="card-head">
+        <span class="card-title">Reading history</span>
+        <span class="count-badge" id="countBadge">0 readings</span>
+      </div>
+      <div class="tbl-wrap">
+        <table id="histTable">
+          <thead>
+            <tr><th style="width:60px">Time</th><th style="width:44px">pH</th><th style="width:52px">Temp</th><th style="width:52px">Gas</th><th style="width:70px">Status</th><th style="width:52px">Shelf</th></tr>
+          </thead>
+          <tbody id="histBody">
+            <tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:24px;font-family:'DM Sans',sans-serif">No data yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="alert-card">
+      <div class="card-head">
+        <span class="card-title">Event log</span>
+        <span class="count-badge" id="alertCount">0 events</span>
+      </div>
+      <div class="alert-list" id="alertList">
+        <div class="empty-state">Connect to server to begin</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="poll-bar" id="pollBar">Not connected — enter server URL and click Connect</div>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+const POLL_MS   = 1000;
+let SERVER      = 'http://localhost:5000';
+let pollTimer   = null;
+let historyData = [];
+let alertEvents = 0;
+let lineChart   = null;
+let pieChart    = null;
+const PIE_COUNTS = { Fresh: 0, Warning: 0, Spoiled: 0 };
+
+// ── Clock ─────────────────────────────────────────────────
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-IN');
+}, 1000);
+
+// ── Connect ───────────────────────────────────────────────
+async function connectServer() {
+  SERVER = document.getElementById('serverUrl').value.replace(/\/$/, '');
+  try {
+    const res  = await fetch(`${SERVER}/api/health`);
+    const data = await res.json();
+    setLive(true);
+    addAlert('info', `Connected to ${SERVER} · Model loaded: ${data.model_loaded} · Readings: ${data.readings_count}`);
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(pollLatest, POLL_MS);
+    await pollLatest();
+  } catch(e) {
+    setLive(false);
+    addAlert('Spoiled', `Cannot connect to ${SERVER} — is server.py running?`);
+  }
+}
+
+// ── Poll latest ───────────────────────────────────────────
+async function pollLatest() {
+  try {
+    const res = await fetch(`${SERVER}/api/latest`, { cache: 'no-store' });
+    if (res.status === 204) return;
+    const data = await res.json();
+
+    const lastTs = historyData.length ? historyData[historyData.length-1].timestamp : null;
+    if (data.timestamp !== lastTs) {
+      historyData.push(data);
+      if (historyData.length > 100) historyData.shift();
+      if (PIE_COUNTS[data.status] !== undefined) PIE_COUNTS[data.status]++;
+      renderReading(data);
+      updateTable();
+      updateCharts();
+    }
+
+    setLive(true);
+    document.getElementById('pollBar').textContent =
+      `Live · Last polled ${new Date().toLocaleTimeString('en-IN')} · ${historyData.length} total readings`;
+
+  } catch(e) {
+    setLive(false);
+    document.getElementById('pollBar').textContent = `Connection lost — retrying...`;
+  }
+}
+
+// ── Render latest reading ─────────────────────────────────
+function renderReading(d) {
+  const banner = document.getElementById('statusBanner');
+  banner.className = `status-banner ${d.status}`;
+  document.getElementById('statusEye').textContent = 'ML Prediction';
+  document.getElementById('statusVal').textContent  = d.status.toUpperCase();
+
+  const prob = d.probabilities || {};
+  const conf = prob[d.status] || 0;
+  document.getElementById('confFill').style.width = conf + '%';
+  document.getElementById('confPct').textContent  = conf.toFixed(1) + '%';
+  document.getElementById('statusTs').textContent =
+    'Last reading at ' + new Date(d.timestamp).toLocaleTimeString('en-IN');
+
+  document.getElementById('shelfVal').textContent  = d.shelf_life !== undefined ? d.shelf_life : '—';
+  document.getElementById('alertText').textContent = d.alert || '';
+
+  document.getElementById('mPh').textContent   = parseFloat(d.ph).toFixed(2);
+  document.getElementById('mTemp').textContent = parseFloat(d.temp).toFixed(1);
+  document.getElementById('mGas').textContent  = Math.round(d.gas);
+
+  document.getElementById('bPh').style.width   = Math.min(100, (parseFloat(d.ph) / 14) * 100).toFixed(1) + '%';
+  document.getElementById('bTemp').style.width = Math.min(100, (parseFloat(d.temp) / 50) * 100).toFixed(1) + '%';
+  document.getElementById('bGas').style.width  = Math.min(100, (parseFloat(d.gas)  / 600) * 100).toFixed(1) + '%';
+
+  if (prob.Fresh   !== undefined) { document.getElementById('pFresh').textContent   = prob.Fresh.toFixed(1)   + '%'; document.getElementById('pfFresh').style.width   = prob.Fresh   + '%'; }
+  if (prob.Warning !== undefined) { document.getElementById('pWarning').textContent = prob.Warning.toFixed(1) + '%'; document.getElementById('pfWarning').style.width = prob.Warning + '%'; }
+  if (prob.Spoiled !== undefined) { document.getElementById('pSpoiled').textContent = prob.Spoiled.toFixed(1) + '%'; document.getElementById('pfSpoiled').style.width = prob.Spoiled + '%'; }
+
+  if (d.status === 'Spoiled') addAlert('Spoiled', d.alert);
+  else if (d.status === 'Warning') addAlert('Warning', d.alert);
+}
+
+// ── Charts ────────────────────────────────────────────────
+function updateCharts() {
+  const last   = historyData.slice(-25);
+  const labels = last.map(r => new Date(r.timestamp).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit' }));
+  const phs    = last.map(r => +parseFloat(r.ph).toFixed(2));
+  const temps  = last.map(r => +parseFloat(r.temp).toFixed(1));
+  const gases  = last.map(r => +(parseFloat(r.gas) / 10).toFixed(1));
+
+  if (!lineChart) {
+    lineChart = new Chart(document.getElementById('lineChart'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'pH',      data: phs,   borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,.05)', tension: .35, pointRadius: 2, borderDash: [] },
+          { label: 'Temp',    data: temps, borderColor: '#ea580c', backgroundColor: 'rgba(234,88,12,.05)',  tension: .35, pointRadius: 2, borderDash: [4,2] },
+          { label: 'Gas÷10',  data: gases, borderColor: '#0284c7', backgroundColor: 'rgba(2,132,199,.05)',  tension: .35, pointRadius: 2, borderDash: [2,2] }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { font: { size: 10 }, color: '#9ca3af', maxTicksLimit: 7 }, grid: { color: '#f3f4f6' } },
+          y: { ticks: { font: { size: 10 }, color: '#9ca3af' }, grid: { color: '#f3f4f6' } }
+        }
+      }
+    });
+  } else {
+    lineChart.data.labels = labels;
+    lineChart.data.datasets[0].data = phs;
+    lineChart.data.datasets[1].data = temps;
+    lineChart.data.datasets[2].data = gases;
+    lineChart.update('none');
+  }
+
+  const pData = [PIE_COUNTS.Fresh, PIE_COUNTS.Warning, PIE_COUNTS.Spoiled];
+  if (!pieChart) {
+    pieChart = new Chart(document.getElementById('pieChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Fresh', 'Warning', 'Spoiled'],
+        datasets: [{ data: pData, backgroundColor: ['#16a34a','#d97706','#dc2626'], borderWidth: 0 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '62%' }
+    });
+  } else {
+    pieChart.data.datasets[0].data = pData;
+    pieChart.update('none');
+  }
+}
+
+// ── Table ─────────────────────────────────────────────────
+function updateTable() {
+  const rows = historyData.slice().reverse().slice(0, 60);
+  document.getElementById('histBody').innerHTML = rows.map(r => `
+    <tr>
+      <td>${new Date(r.timestamp).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</td>
+      <td>${parseFloat(r.ph).toFixed(2)}</td>
+      <td>${parseFloat(r.temp).toFixed(1)}</td>
+      <td>${Math.round(r.gas)}</td>
+      <td><span class="pill ${r.status}">${r.status}</span></td>
+      <td>${r.shelf_life !== undefined ? r.shelf_life + 'h' : '—'}</td>
+    </tr>`).join('');
+  document.getElementById('countBadge').textContent = historyData.length + ' readings';
+}
+
+// ── Alert log ─────────────────────────────────────────────
+function addAlert(type, msg) {
+  if (!msg) return;
+  const list = document.getElementById('alertList');
+  if (list.querySelector('.empty-state')) list.innerHTML = '';
+  const item = document.createElement('div');
+  item.className = `alert-item ${type}`;
+  item.innerHTML = `<span class="alert-time">${new Date().toLocaleTimeString('en-IN')}</span><span class="alert-msg">${msg}</span>`;
+  list.prepend(item);
+  while (list.children.length > 30) list.lastChild.remove();
+  alertEvents++;
+  document.getElementById('alertCount').textContent = alertEvents + ' events';
+}
+
+// ── Load history ──────────────────────────────────────────
+async function loadHistory() {
+  SERVER = document.getElementById('serverUrl').value.replace(/\/$/, '');
+  try {
+    const res  = await fetch(`${SERVER}/api/history?limit=50`);
+    const data = await res.json();
+    historyData = data.readings || [];
+    historyData.forEach(r => { if (PIE_COUNTS[r.status] !== undefined) PIE_COUNTS[r.status]++; });
+    if (historyData.length > 0) {
+      renderReading(historyData[historyData.length - 1]);
+      updateTable();
+      updateCharts();
+    }
+    addAlert('info', `Loaded ${historyData.length} historical readings`);
+  } catch(e) {
+    addAlert('Spoiled', `Failed to load history from ${SERVER}`);
+  }
+}
+
+// ── Clear ─────────────────────────────────────────────────
+async function clearDashboard() {
+  try { await fetch(`${SERVER}/api/clear`, { method: 'POST' }); } catch(e) {}
+  historyData = [];
+  PIE_COUNTS.Fresh = 0; PIE_COUNTS.Warning = 0; PIE_COUNTS.Spoiled = 0;
+  alertEvents = 0;
+  document.getElementById('statusBanner').className = 'status-banner';
+  document.getElementById('statusEye').textContent  = 'Waiting for ESP32';
+  document.getElementById('statusVal').textContent  = '— — —';
+  document.getElementById('confFill').style.width   = '0%';
+  document.getElementById('confPct').textContent    = '— %';
+  document.getElementById('statusTs').textContent   = 'No readings yet';
+  document.getElementById('shelfVal').textContent   = '—';
+  document.getElementById('alertText').textContent  = '—';
+  document.getElementById('mPh').textContent        = '—';
+  document.getElementById('mTemp').textContent      = '—';
+  document.getElementById('mGas').textContent       = '—';
+  document.getElementById('bPh').style.width        = '0%';
+  document.getElementById('bTemp').style.width      = '0%';
+  document.getElementById('bGas').style.width       = '0%';
+  document.getElementById('pFresh').textContent     = '—';
+  document.getElementById('pWarning').textContent   = '—';
+  document.getElementById('pSpoiled').textContent   = '—';
+  document.getElementById('pfFresh').style.width    = '0%';
+  document.getElementById('pfWarning').style.width  = '0%';
+  document.getElementById('pfSpoiled').style.width  = '0%';
+  document.getElementById('countBadge').textContent = '0 readings';
+  document.getElementById('alertCount').textContent = '0 events';
+  document.getElementById('histBody').innerHTML     = '<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:24px;font-family:\'DM Sans\',sans-serif">No data yet</td></tr>';
+  document.getElementById('alertList').innerHTML    = '<div class="empty-state">Cleared</div>';
+  if (lineChart) { lineChart.destroy(); lineChart = null; }
+  if (pieChart)  { pieChart.destroy();  pieChart  = null; }
+}
+
+// ── Export CSV ────────────────────────────────────────────
+async function exportCSV() {
+  if (!historyData.length) { alert('No data to export.'); return; }
+  const rows = [
+    ['Timestamp', 'pH', 'Temp (C)', 'Gas (ppm)', 'Status', 'Shelf Life (hrs)', 'Alert'],
+    ...historyData.map(r => [r.timestamp, r.ph, r.temp, r.gas, r.status, r.shelf_life, `"${r.alert || ''}"`])
+  ];
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([rows.map(r => r.join(',')).join('\n')], { type: 'text/csv' }));
+  a.download = 'milk_readings.csv';
+  a.click();
+}
+
+// ── Live pill ─────────────────────────────────────────────
+function setLive(ok) {
+  const pill = document.getElementById('livePill');
+  pill.className = 'live-pill' + (ok ? '' : ' off');
+  document.getElementById('liveText').textContent = ok ? 'Live' : 'Offline';
+}
+</script>
+</body>
+</html>
